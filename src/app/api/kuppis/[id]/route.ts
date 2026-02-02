@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import supabase from '@/lib/supabase';
 import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
-import { isValidUUID, sanitizeObject } from '@/lib/validation';
+import { sanitizeObject } from '@/lib/validation';
 
 // GET - Fetch single kuppi (protected)
 export async function GET(
@@ -21,8 +21,8 @@ export async function GET(
 
     const { id } = await params;
 
-    // Validate UUID format
-    if (!isValidUUID(id)) {
+    // Validate ID is numeric
+    if (!/^\d+$/.test(id)) {
       return NextResponse.json({ error: 'Invalid kuppi ID format' }, { status: 400 });
     }
 
@@ -63,8 +63,8 @@ export async function PATCH(
 
     const { id } = await params;
 
-    // Validate UUID format
-    if (!isValidUUID(id)) {
+    // Validate ID is numeric
+    if (!/^\d+$/.test(id)) {
       return NextResponse.json({ error: 'Invalid kuppi ID format' }, { status: 400 });
     }
 
@@ -122,8 +122,8 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Validate UUID format
-    if (!isValidUUID(id)) {
+    // Validate ID is numeric
+    if (!/^\d+$/.test(id)) {
       return NextResponse.json({ error: 'Invalid kuppi ID format' }, { status: 400 });
     }
 
