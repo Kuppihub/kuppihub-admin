@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import supabase from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase';
 import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
 import { sanitizeObject } from '@/lib/validation';
+
+const supabase = createAdminClient();
 
 // GET - Fetch single kuppi (protected)
 export async function GET(

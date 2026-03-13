@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import supabase from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase';
 import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+
+const supabase = createAdminClient();
 
 // GET - Fetch all users (protected)
 export async function GET(request: NextRequest) {
