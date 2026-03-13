@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import admin from 'firebase-admin';
+import { initializeApp, getApps, cert, applicationDefault } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import type { ServiceAccount } from 'firebase-admin/app';
 
-// Initialize Firebase Admin
-if (!admin.apps.length) {
-  const serviceAccount = {
+// Initialize Firebase Admin (modular SDK)
+if (!getApps().length) {
+  const serviceAccount: Partial<ServiceAccount> = {
     projectId: process.env.FIREBASE_PROJECT_ID,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
   };
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+  const hasServiceAccount =
+    !!serviceAccount.projectId && !!serviceAccount.clientEmail && !!serviceAccount.privateKey;
+
+  initializeApp({
+    credential: hasServiceAccount
+      ? cert(serviceAccount as ServiceAccount)
+      : applicationDefault(),
   });
 }
 
-const auth = admin.auth();
+const auth = getAuth();
 
 // Rate limiting store (in-memory, consider Redis for production)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
