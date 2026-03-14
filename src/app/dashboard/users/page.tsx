@@ -262,7 +262,7 @@ export default function UsersPage() {
 
   if (!authLoading && !hasPermission(user, 'users.read')) {
     return (
-      <Alert severity=\"error\">You do not have permission to view users.</Alert>
+      <Alert severity="error">You do not have permission to view users.</Alert>
     );
   }
 

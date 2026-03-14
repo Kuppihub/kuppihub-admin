@@ -108,6 +108,7 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
+  const adminUser = user;
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -386,26 +387,26 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {stats.pendingUsers.map((user) => (
-                  <TableRow key={user.id} hover>
+                {stats.pendingUsers.map((pendingUser) => (
+                  <TableRow key={pendingUser.id} hover>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar src={user.photo_url} alt={user.display_name}>
-                          {user.display_name?.charAt(0).toUpperCase()}
+                        <Avatar src={pendingUser.photo_url} alt={pendingUser.display_name}>
+                          {pendingUser.display_name?.charAt(0).toUpperCase()}
                         </Avatar>
                         <Typography variant="body2" fontWeight={500}>
-                          {user.display_name || 'Unknown User'}
+                          {pendingUser.display_name || 'Unknown User'}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {user.email}
+                        {pendingUser.email}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
                       <Chip 
-                        label={user.kuppi_count} 
+                        label={pendingUser.kuppi_count} 
                         size="small" 
                         color="info"
                         icon={<VideoLibrary sx={{ fontSize: 16 }} />}
@@ -413,7 +414,7 @@ export default function DashboardPage() {
                     </TableCell>
                     <TableCell align="center">
                       <Typography variant="body2" color="text.secondary">
-                        {new Date(user.created_at).toLocaleDateString()}
+                        {new Date(pendingUser.created_at).toLocaleDateString()}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
@@ -421,11 +422,11 @@ export default function DashboardPage() {
                         variant="contained"
                         color="success"
                         size="small"
-                        startIcon={approvingUser === user.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
-                        onClick={() => handleApproveUser(user.id)}
-                        disabled={approvingUser === user.id || !hasPermission(user, 'users.approve')}
+                        startIcon={approvingUser === pendingUser.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
+                        onClick={() => handleApproveUser(pendingUser.id)}
+                        disabled={approvingUser === pendingUser.id || !hasPermission(adminUser, 'users.approve')}
                       >
-                        {approvingUser === user.id ? 'Approving...' : 'Approve'}
+                        {approvingUser === pendingUser.id ? 'Approving...' : 'Approve'}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -505,7 +506,7 @@ export default function DashboardPage() {
                         size="small"
                         startIcon={approvingKuppi === kuppi.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
                         onClick={() => handleApproveKuppi(kuppi.id)}
-                        disabled={approvingKuppi === kuppi.id || !hasPermission(user, 'kuppis.approve')}
+                        disabled={approvingKuppi === kuppi.id || !hasPermission(adminUser, 'kuppis.approve')}
                       >
                         {approvingKuppi === kuppi.id ? 'Approving...' : 'Approve'}
                       </Button>

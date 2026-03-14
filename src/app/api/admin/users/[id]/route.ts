@@ -4,6 +4,14 @@ import { requireAdminPermission, rateLimit } from '@/lib/auth';
 
 const supabase = createAdminClient();
 
+const getRoleName = (adminRoles: any): string | null => {
+  if (!adminRoles) return null;
+  if (Array.isArray(adminRoles)) {
+    return adminRoles[0]?.name || null;
+  }
+  return adminRoles.name || null;
+};
+
 const getSuperAdminRoleId = async () => {
   const { data } = await supabase
     .from('admin_roles')
@@ -62,7 +70,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Admin not found' }, { status: 404 });
     }
 
-    if ((updates.is_active === false || updates.role_id) && currentAdmin.admin_roles?.name === 'super_admin') {
+    if ((updates.is_active === false || updates.role_id) && getRoleName(currentAdmin.admin_roles) === 'super_admin') {
       const superAdminRoleId = await getSuperAdminRoleId();
       if (superAdminRoleId) {
         const { count } = await supabase
@@ -123,7 +131,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin not found' }, { status: 404 });
     }
 
-    if (currentAdmin.admin_roles?.name === 'super_admin' && currentAdmin.is_active) {
+    if (getRoleName(currentAdmin.admin_roles) === 'super_admin' && currentAdmin.is_active) {
       const superAdminRoleId = await getSuperAdminRoleId();
       if (superAdminRoleId) {
         const { count } = await supabase
