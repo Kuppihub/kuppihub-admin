@@ -10,12 +10,15 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '@/lib/firebase';
 
-interface AdminUser {
+export interface AdminUser {
   uid: string;
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
   isAdmin: boolean;
+  role: string | null;
+  permissions: string[];
+  isSuperAdmin: boolean;
 }
 
 interface AuthContextType {
@@ -25,19 +28,10 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   error: string | null;
   getIdToken: () => Promise<string | null>;
+  refreshAdminProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Admin emails - can be configured via environment variable
-const getAdminEmails = (): string[] => {
-  const envEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS;
-  console.log('[Auth] Admin emails from env:', envEmails);
-  if (envEmails) {
-    return envEmails.split(',').map(email => email.trim().toLowerCase());
-  }
-  return [];
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -45,11 +39,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const redirectHandled = useRef(false);
 
-  const checkIsAdmin = (email: string | null): boolean => {
-    if (!email) return false;
-    const adminEmails = getAdminEmails();
-   // console.log('[Auth] Checking admin status for:', email, 'Admin list:', adminEmails);
-    return adminEmails.includes(email.toLowerCase());
+  const fetchAdminProfile = async (firebaseUser: User): Promise<AdminUser | null> => {
+    try {
+      const token = await firebaseUser.getIdToken();
+      const response = await fetch('/api/admin/me', {
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      const admin = data?.admin;
+      if (!admin) return null;
+
+      return {
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName,
+        photoURL: firebaseUser.photoURL,
+        isAdmin: true,
+        role: admin.role || null,
+        permissions: admin.permissions || [],
+        isSuperAdmin: !!admin.isSuperAdmin,
+      };
+    } catch (error) {
+      console.error('[Auth] Failed to fetch admin profile:', error);
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -65,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await getRedirectResult(auth);
         if (result) {
           console.log('[Auth] Redirect result received:', result.user.email);
-          const isAdmin = checkIsAdmin(result.user.email);
-          if (!isAdmin) {
+          const adminProfile = await fetchAdminProfile(result.user);
+          if (!adminProfile) {
             console.log('[Auth] User is not admin, signing out');
             await firebaseSignOut(auth);
             if (isMounted) {
@@ -93,10 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Auth state changed:', firebaseUser?.email || 'null');
       
       if (firebaseUser) {
-        const isAdmin = checkIsAdmin(firebaseUser.email);
-        
-        if (!isAdmin) {
-          // Not an admin, sign them out
+        const adminProfile = await fetchAdminProfile(firebaseUser);
+
+        if (!adminProfile) {
           console.log('[Auth] User not admin, signing out');
           await firebaseSignOut(auth);
           if (isMounted) {
@@ -106,13 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           console.log('[Auth] User is admin, setting user state');
           if (isMounted) {
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              isAdmin: true,
-            });
+            setUser(adminProfile);
             setError(null);
           }
         }
@@ -140,8 +153,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await signInWithPopup(auth, googleProvider);
       console.log('[Auth] Sign-in successful:', result.user.email);
       
-      const isAdmin = checkIsAdmin(result.user.email);
-      if (!isAdmin) {
+      const adminProfile = await fetchAdminProfile(result.user);
+      if (!adminProfile) {
         console.log('[Auth] User is not admin, signing out');
         await firebaseSignOut(auth);
         setError('Access denied. You are not authorized as an admin.');
@@ -186,8 +199,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshAdminProfile = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    const adminProfile = await fetchAdminProfile(currentUser);
+    if (adminProfile) {
+      setUser(adminProfile);
+      setError(null);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, error, getIdToken }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, error, getIdToken, refreshAdminProfile }}>
       {children}
     </AuthContext.Provider>
   );

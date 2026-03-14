@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+import { requireAdminPermission, createForbiddenResponse, rateLimit } from '@/lib/auth';
 import { sanitizeObject } from '@/lib/validation';
 
 const supabase = createAdminClient();
@@ -16,10 +16,8 @@ export async function GET(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'kuppis.read');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 
@@ -58,10 +56,8 @@ export async function PATCH(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'kuppis.update');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 
@@ -85,6 +81,14 @@ export async function PATCH(
       if (sanitizedBody[field] !== undefined) {
         filteredBody[field] = sanitizedBody[field];
       }
+    }
+
+    if (
+      sanitizedBody.is_approved !== undefined &&
+      !authResult.admin.isSuperAdmin &&
+      !authResult.admin.permissions.includes('kuppis.approve')
+    ) {
+      return createForbiddenResponse('Insufficient permissions to approve kuppis');
     }
 
     const { data, error } = await supabase
@@ -117,10 +121,8 @@ export async function DELETE(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'kuppis.delete');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 

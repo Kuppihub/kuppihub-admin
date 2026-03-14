@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+import { requireAdminPermission, rateLimit } from '@/lib/auth';
 
 const supabase = createAdminClient();
 
@@ -11,10 +11,8 @@ export async function GET(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'stats.read');
+    if ('response' in authResult) return authResult.response;
 
     // Get counts from different tables
     const [usersRes, modulesRes, kuppisRes, tutorsRes, pendingKuppisRes] = await Promise.all([

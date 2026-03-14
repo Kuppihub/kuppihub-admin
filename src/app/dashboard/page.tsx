@@ -30,6 +30,8 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { authFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/lib/permissions';
 
 interface PendingUser {
   id: number;
@@ -105,6 +107,7 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
 }
 
 export default function DashboardPage() {
+  const { user, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,8 +115,14 @@ export default function DashboardPage() {
   const [approvingKuppi, setApprovingKuppi] = useState<number | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!hasPermission(user, 'stats.read')) {
+      setLoading(false);
+      setError('You do not have permission to view dashboard stats.');
+      return;
+    }
     fetchStats();
-  }, []);
+  }, [authLoading, user]);
 
   const fetchStats = async () => {
     try {
@@ -131,6 +140,10 @@ export default function DashboardPage() {
   };
 
   const handleApproveUser = async (userId: number) => {
+    if (!hasPermission(user, 'users.approve')) {
+      toast.error('You do not have permission to approve users');
+      return;
+    }
     setApprovingUser(userId);
     try {
       const response = await authFetch('/api/users', {
@@ -155,6 +168,10 @@ export default function DashboardPage() {
   };
 
   const handleApproveKuppi = async (kuppiId: number) => {
+    if (!hasPermission(user, 'kuppis.approve')) {
+      toast.error('You do not have permission to approve kuppis');
+      return;
+    }
     setApprovingKuppi(kuppiId);
     try {
       const response = await authFetch(`/api/kuppis/${kuppiId}`, {
@@ -261,8 +278,15 @@ export default function DashboardPage() {
                 transform: 'translateY(-4px)',
                 boxShadow: '0 8px 25px rgba(0,0,0,0.3)',
               },
+              opacity: hasPermission(user, 'modules.read') ? 1 : 0.6,
             }}
-            onClick={() => window.location.href = '/dashboard/modules'}
+            onClick={() => {
+              if (!hasPermission(user, 'modules.read')) {
+                toast.error('You do not have permission to view modules');
+                return;
+              }
+              window.location.href = '/dashboard/modules';
+            }}
           >
             <School sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
             <Typography variant="h6" fontWeight={600}>
@@ -283,8 +307,15 @@ export default function DashboardPage() {
                 transform: 'translateY(-4px)',
                 boxShadow: '0 8px 25px rgba(0,0,0,0.3)',
               },
+              opacity: hasPermission(user, 'kuppis.read') ? 1 : 0.6,
             }}
-            onClick={() => window.location.href = '/dashboard/kuppis'}
+            onClick={() => {
+              if (!hasPermission(user, 'kuppis.read')) {
+                toast.error('You do not have permission to view kuppis');
+                return;
+              }
+              window.location.href = '/dashboard/kuppis';
+            }}
           >
             <VideoLibrary sx={{ fontSize: 40, color: 'warning.main', mb: 2 }} />
             <Typography variant="h6" fontWeight={600}>
@@ -305,8 +336,15 @@ export default function DashboardPage() {
                 transform: 'translateY(-4px)',
                 boxShadow: '0 8px 25px rgba(0,0,0,0.3)',
               },
+              opacity: hasPermission(user, 'users.read') ? 1 : 0.6,
             }}
-            onClick={() => window.location.href = '/dashboard/users'}
+            onClick={() => {
+              if (!hasPermission(user, 'users.read')) {
+                toast.error('You do not have permission to view users');
+                return;
+              }
+              window.location.href = '/dashboard/users';
+            }}
           >
             <People sx={{ fontSize: 40, color: 'secondary.main', mb: 2 }} />
             <Typography variant="h6" fontWeight={600}>
@@ -385,7 +423,7 @@ export default function DashboardPage() {
                         size="small"
                         startIcon={approvingUser === user.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
                         onClick={() => handleApproveUser(user.id)}
-                        disabled={approvingUser === user.id}
+                        disabled={approvingUser === user.id || !hasPermission(user, 'users.approve')}
                       >
                         {approvingUser === user.id ? 'Approving...' : 'Approve'}
                       </Button>
@@ -467,7 +505,7 @@ export default function DashboardPage() {
                         size="small"
                         startIcon={approvingKuppi === kuppi.id ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
                         onClick={() => handleApproveKuppi(kuppi.id)}
-                        disabled={approvingKuppi === kuppi.id}
+                        disabled={approvingKuppi === kuppi.id || !hasPermission(user, 'kuppis.approve')}
                       >
                         {approvingKuppi === kuppi.id ? 'Approving...' : 'Approve'}
                       </Button>

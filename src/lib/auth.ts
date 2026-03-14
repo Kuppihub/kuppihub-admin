@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initializeApp, getApps, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import type { ServiceAccount } from 'firebase-admin/app';
+import { createAdminClient } from '@/lib/supabase';
 
 // Initialize Firebase Admin (modular SDK)
 if (!getApps().length) {
@@ -22,6 +23,7 @@ if (!getApps().length) {
 }
 
 const auth = getAuth();
+const supabase = createAdminClient();
 
 // Rate limiting store (in-memory, consider Redis for production)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -34,6 +36,14 @@ export interface AuthResult {
   uid?: string;
   email?: string;
   error?: string;
+}
+
+export interface AdminAuthContext {
+  uid: string;
+  email: string;
+  role: string;
+  permissions: string[];
+  isSuperAdmin: boolean;
 }
 
 /**
@@ -124,12 +134,12 @@ export async function verifyAdminToken(request: NextRequest): Promise<string | n
       return null;
     }
 
-    // Check if user is admin by email
-    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase());
-    if (!adminEmails.includes(decodedToken.email?.toLowerCase() || '')) {
-      console.warn('Non-admin access attempt:', decodedToken.email);
-      return null;
-    }
+    // Legacy behavior retained for compatibility; use requireAdminPermission instead.
+    const email = decodedToken.email?.toLowerCase() || '';
+    if (!email) return null;
+
+    const adminUser = await getAdminByEmail(email);
+    if (!adminUser?.is_active) return null;
 
     return decodedToken.uid;
   } catch (error) {
@@ -162,9 +172,13 @@ export async function authenticateRequest(request: NextRequest): Promise<AuthRes
 
     const decodedToken = await auth.verifyIdToken(token);
 
-    // Check if user is admin by email
-    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map((e) => e.trim().toLowerCase());
-    if (!adminEmails.includes(decodedToken.email?.toLowerCase() || '')) {
+    const email = decodedToken.email?.toLowerCase() || '';
+    if (!email) {
+      return { success: false, error: 'Access denied. Admin privileges required.' };
+    }
+
+    const adminUser = await getAdminByEmail(email);
+    if (!adminUser?.is_active) {
       return { success: false, error: 'Access denied. Admin privileges required.' };
     }
 
@@ -216,6 +230,137 @@ export function createForbiddenResponse(message: string = 'Forbidden') {
 
 export function createBadRequestResponse(message: string = 'Bad request') {
   return NextResponse.json({ error: message }, { status: 400 });
+}
+
+interface AdminLookup {
+  id: number;
+  email: string;
+  role_id: number;
+  role_name: string;
+  is_active: boolean;
+}
+
+const getBootstrapAdminEmails = (): string[] => {
+  const envEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS;
+  if (!envEmails) return [];
+  return envEmails.split(',').map((email) => email.trim().toLowerCase()).filter(Boolean);
+};
+
+async function getAdminUserCount(): Promise<number> {
+  try {
+    const { count } = await supabase
+      .from('admin_users')
+      .select('*', { count: 'exact', head: true });
+    return count || 0;
+  } catch (error) {
+    console.warn('Admin user count lookup failed:', error);
+    return 0;
+  }
+}
+
+async function getAdminByEmail(email: string): Promise<AdminLookup | null> {
+  const { data, error } = await supabase
+    .from('admin_users')
+    .select('id,email,is_active,role_id,admin_roles(id,name)')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const role = (data as any).admin_roles;
+  if (!role?.id || !role?.name) return null;
+
+  return {
+    id: data.id,
+    email: data.email,
+    role_id: role.id,
+    role_name: role.name,
+    is_active: data.is_active,
+  };
+}
+
+async function getRolePermissions(roleId: number): Promise<string[]> {
+  const { data } = await supabase
+    .from('admin_role_permissions')
+    .select('admin_permissions(key)')
+    .eq('role_id', roleId);
+
+  if (!data) return [];
+  return data
+    .map((row: any) => row.admin_permissions?.key)
+    .filter((key: string | undefined) => typeof key === 'string');
+}
+
+async function getAdminContext(email: string, uid: string): Promise<AdminAuthContext | null> {
+  const adminUser = await getAdminByEmail(email);
+  if (!adminUser || !adminUser.is_active) return null;
+
+  const isSuperAdmin = adminUser.role_name === 'super_admin';
+  const permissions = isSuperAdmin ? ['*'] : await getRolePermissions(adminUser.role_id);
+
+  return {
+    uid,
+    email,
+    role: adminUser.role_name,
+    permissions,
+    isSuperAdmin,
+  };
+}
+
+function hasPermission(admin: AdminAuthContext, permission: string): boolean {
+  if (admin.isSuperAdmin) return true;
+  return admin.permissions.includes(permission);
+}
+
+export async function requireAdminPermission(
+  request: NextRequest,
+  permission?: string
+): Promise<{ admin: AdminAuthContext } | { response: NextResponse }> {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return { response: createUnauthorizedResponse('Missing or invalid authorization header') };
+    }
+
+    const token = authHeader.substring(7);
+    if (!token || token.length < 100) {
+      return { response: createUnauthorizedResponse('Invalid token format') };
+    }
+
+    const decodedToken = await auth.verifyIdToken(token);
+    const email = decodedToken.email?.toLowerCase() || '';
+    if (!email) {
+      return { response: createUnauthorizedResponse('Access denied. Admin privileges required.') };
+    }
+
+    let adminContext = await getAdminContext(email, decodedToken.uid);
+
+    if (!adminContext) {
+      const adminCount = await getAdminUserCount();
+      const bootstrapAdmins = getBootstrapAdminEmails();
+      if (adminCount === 0 && bootstrapAdmins.includes(email)) {
+        adminContext = {
+          uid: decodedToken.uid,
+          email,
+          role: 'super_admin',
+          permissions: ['*'],
+          isSuperAdmin: true,
+        };
+      }
+    }
+
+    if (!adminContext) {
+      return { response: createUnauthorizedResponse('Access denied. Admin privileges required.') };
+    }
+
+    if (permission && !hasPermission(adminContext, permission)) {
+      return { response: createForbiddenResponse('Insufficient permissions') };
+    }
+
+    return { admin: adminContext };
+  } catch (error) {
+    console.error('Authorization error:', error);
+    return { response: createUnauthorizedResponse('Authentication failed') };
+  }
 }
 
 export function createRateLimitResponse(message: string = 'Too many requests') {

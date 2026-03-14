@@ -14,6 +14,7 @@ import {
   DialogActions,
   Chip,
   CircularProgress,
+  Alert,
   InputAdornment,
   FormControl,
   InputLabel,
@@ -32,6 +33,8 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { authFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/lib/permissions';
 
 interface Module {
   id: number;
@@ -65,6 +68,7 @@ interface ModuleAssignment {
 }
 
 export default function ModulesPage() {
+  const { user, loading: authLoading } = useAuth();
   const [modules, setModules] = useState<Module[]>([]);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -91,8 +95,13 @@ export default function ModulesPage() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!hasPermission(user, 'modules.read')) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, []);
+  }, [authLoading, user]);
 
   const fetchData = async () => {
     try {
@@ -125,6 +134,10 @@ export default function ModulesPage() {
   };
 
   const handleAddModule = async () => {
+    if (!hasPermission(user, 'modules.create')) {
+      toast.error('You do not have permission to create modules');
+      return;
+    }
     try {
       const response = await authFetch('/api/modules', {
         method: 'POST',
@@ -146,6 +159,10 @@ export default function ModulesPage() {
 
   const handleEditModule = async () => {
     if (!selectedModule) return;
+    if (!hasPermission(user, 'modules.update')) {
+      toast.error('You do not have permission to update modules');
+      return;
+    }
 
     try {
       const response = await authFetch(`/api/modules/${selectedModule.id}`, {
@@ -168,6 +185,10 @@ export default function ModulesPage() {
 
   const handleDeleteModule = async () => {
     if (!selectedModule) return;
+    if (!hasPermission(user, 'modules.delete')) {
+      toast.error('You do not have permission to delete modules');
+      return;
+    }
 
     try {
       const response = await authFetch(`/api/modules/${selectedModule.id}`, {
@@ -187,6 +208,10 @@ export default function ModulesPage() {
   };
 
   const handleAssignModule = async () => {
+    if (!hasPermission(user, 'module_assignments.create')) {
+      toast.error('You do not have permission to assign modules');
+      return;
+    }
     try {
       const response = await authFetch('/api/module-assignments', {
         method: 'POST',
@@ -215,6 +240,11 @@ export default function ModulesPage() {
       module.code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       module.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const canCreate = hasPermission(user, 'modules.create');
+  const canUpdate = hasPermission(user, 'modules.update');
+  const canDelete = hasPermission(user, 'modules.delete');
+  const canAssign = hasPermission(user, 'module_assignments.create');
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
@@ -260,6 +290,7 @@ export default function ModulesPage() {
               setSelectedModule(params.row);
               setEditModuleOpen(true);
             }}
+            disabled={!canUpdate}
           >
             <Edit fontSize="small" />
           </IconButton>
@@ -270,6 +301,7 @@ export default function ModulesPage() {
               setAssignForm({ ...assignForm, module_id: params.row.id });
               setAssignDialogOpen(true);
             }}
+            disabled={!canAssign}
           >
             <Add fontSize="small" />
           </IconButton>
@@ -280,6 +312,7 @@ export default function ModulesPage() {
               setSelectedModule(params.row);
               setDeleteDialogOpen(true);
             }}
+            disabled={!canDelete}
           >
             <Delete fontSize="small" />
           </IconButton>
@@ -287,6 +320,10 @@ export default function ModulesPage() {
       ),
     },
   ];
+
+  if (!authLoading && !hasPermission(user, 'modules.read')) {
+    return <Alert severity="error">You do not have permission to view modules.</Alert>;
+  }
 
   return (
     <Box>
@@ -303,7 +340,12 @@ export default function ModulesPage() {
           <Button variant="outlined" startIcon={<Refresh />} onClick={fetchData}>
             Refresh
           </Button>
-          <Button variant="contained" startIcon={<Add />} onClick={() => setAddModuleOpen(true)}>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => setAddModuleOpen(true)}
+            disabled={!canCreate}
+          >
             Add Module
           </Button>
         </Box>

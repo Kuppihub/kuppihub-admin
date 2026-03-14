@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+import { requireAdminPermission, rateLimit } from '@/lib/auth';
 import { validateRequest, PATTERNS } from '@/lib/validation';
 
 const supabase = createAdminClient();
@@ -13,10 +13,8 @@ export async function GET(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'module_assignments.read');
+    if ('response' in authResult) return authResult.response;
 
     const { data, error } = await supabase
       .from('module_assignments')
@@ -40,10 +38,8 @@ export async function POST(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'module_assignments.create');
+    if ('response' in authResult) return authResult.response;
 
     const body = await request.json();
 

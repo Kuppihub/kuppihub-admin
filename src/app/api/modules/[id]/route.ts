@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+import { requireAdminPermission, rateLimit } from '@/lib/auth';
 import { isValidUUID, sanitizeObject, sanitizeString } from '@/lib/validation';
 
 const supabase = createAdminClient();
@@ -16,10 +16,8 @@ export async function GET(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'modules.read');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 
@@ -54,10 +52,8 @@ export async function PATCH(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'modules.update');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 
@@ -112,10 +108,8 @@ export async function DELETE(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'modules.delete');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 

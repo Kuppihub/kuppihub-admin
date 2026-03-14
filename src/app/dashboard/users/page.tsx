@@ -29,6 +29,8 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { authFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/lib/permissions';
 
 interface User {
   id: number;
@@ -44,6 +46,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,8 +55,13 @@ export default function UsersPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!hasPermission(user, 'users.read')) {
+      setLoading(false);
+      return;
+    }
     fetchUsers();
-  }, []);
+  }, [authLoading, user]);
 
   const fetchUsers = async () => {
     try {
@@ -70,17 +78,21 @@ export default function UsersPage() {
     }
   };
 
-  const handleToggleApproval = async (user: User) => {
+  const handleToggleApproval = async (userRow: User) => {
+    if (!hasPermission(user, 'users.approve')) {
+      toast.error('You do not have permission to approve users');
+      return;
+    }
     try {
-      const response = await authFetch(`/api/users/${user.id}`, {
+      const response = await authFetch(`/api/users/${userRow.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_approved_for_kuppies: !user.is_approved_for_kuppies }),
+        body: JSON.stringify({ is_approved_for_kuppies: !userRow.is_approved_for_kuppies }),
       });
       
       if (!response.ok) throw new Error('Failed to update user');
       
-      toast.success(user.is_approved_for_kuppies ? 'User approval revoked' : 'User approved for kuppies');
+      toast.success(userRow.is_approved_for_kuppies ? 'User approval revoked' : 'User approved for kuppies');
       fetchUsers();
     } catch (error) {
       console.error('Error updating user:', error);
@@ -90,6 +102,10 @@ export default function UsersPage() {
 
   const handleDelete = async () => {
     if (!selectedUser) return;
+    if (!hasPermission(user, 'users.delete')) {
+      toast.error('You do not have permission to delete users');
+      return;
+    }
     
     try {
       const response = await authFetch(`/api/users/${selectedUser.id}`, {
@@ -110,6 +126,10 @@ export default function UsersPage() {
 
   const handleEdit = async (formData: Partial<User>) => {
     if (!selectedUser) return;
+    if (!hasPermission(user, 'users.update')) {
+      toast.error('You do not have permission to update users');
+      return;
+    }
     
     try {
       const response = await authFetch(`/api/users/${selectedUser.id}`, {
@@ -135,6 +155,10 @@ export default function UsersPage() {
       user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.display_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const canUpdate = hasPermission(user, 'users.update');
+  const canApprove = hasPermission(user, 'users.approve');
+  const canDelete = hasPermission(user, 'users.delete');
 
   const columns: GridColDef[] = [
     {
@@ -207,6 +231,7 @@ export default function UsersPage() {
               setSelectedUser(params.row);
               setEditDialogOpen(true);
             }}
+            disabled={!canUpdate}
           >
             <Edit fontSize="small" />
           </IconButton>
@@ -215,6 +240,7 @@ export default function UsersPage() {
             onClick={() => handleToggleApproval(params.row)}
             color={params.row.is_approved_for_kuppies ? 'warning' : 'success'}
             title={params.row.is_approved_for_kuppies ? 'Revoke Kuppi Access' : 'Approve for Kuppies'}
+            disabled={!canApprove}
           >
             {params.row.is_approved_for_kuppies ? <Cancel fontSize="small" /> : <CheckCircle fontSize="small" />}
           </IconButton>
@@ -225,6 +251,7 @@ export default function UsersPage() {
               setSelectedUser(params.row);
               setDeleteDialogOpen(true);
             }}
+            disabled={!canDelete}
           >
             <Delete fontSize="small" />
           </IconButton>
@@ -232,6 +259,12 @@ export default function UsersPage() {
       ),
     },
   ];
+
+  if (!authLoading && !hasPermission(user, 'users.read')) {
+    return (
+      <Alert severity=\"error\">You do not have permission to view users.</Alert>
+    );
+  }
 
   return (
     <Box>

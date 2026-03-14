@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+import { requireAdminPermission, rateLimit } from '@/lib/auth';
 import { isValidUUID } from '@/lib/validation';
 
 const supabase = createAdminClient();
@@ -16,10 +16,8 @@ export async function DELETE(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'module_assignments.delete');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
 

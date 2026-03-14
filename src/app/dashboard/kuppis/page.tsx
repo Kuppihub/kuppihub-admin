@@ -19,6 +19,7 @@ import {
   Select,
   MenuItem,
   Link,
+  Alert,
   SelectChangeEvent,
 } from '@mui/material';
 import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
@@ -35,6 +36,8 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { authFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/lib/permissions';
 
 interface Kuppi {
   id: number;
@@ -64,6 +67,7 @@ interface Module {
 }
 
 export default function KuppisPage() {
+  const { user, loading: authLoading } = useAuth();
   const [kuppis, setKuppis] = useState<Kuppi[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,19 +82,26 @@ export default function KuppisPage() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!hasPermission(user, 'kuppis.read')) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, []);
+  }, [authLoading, user]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [kuppisRes, modulesRes] = await Promise.all([
-        authFetch('/api/kuppis'),
-        authFetch('/api/modules'),
-      ]);
+      const kuppisPromise = authFetch('/api/kuppis');
+      const modulesPromise = hasPermission(user, 'modules.read')
+        ? authFetch('/api/modules')
+        : Promise.resolve(null as Response | null);
+
+      const [kuppisRes, modulesRes] = await Promise.all([kuppisPromise, modulesPromise]);
 
       const kuppisData = await kuppisRes.json();
-      const modulesData = await modulesRes.json();
+      const modulesData = modulesRes ? await modulesRes.json() : { modules: [] };
 
       setKuppis(kuppisData.kuppis || []);
       setModules(modulesData.modules || []);
@@ -103,6 +114,10 @@ export default function KuppisPage() {
   };
 
   const handleToggleVisibility = async (kuppi: Kuppi) => {
+    if (!hasPermission(user, 'kuppis.update')) {
+      toast.error('You do not have permission to update kuppis');
+      return;
+    }
     try {
       const response = await authFetch(`/api/kuppis/${kuppi.id}`, {
         method: 'PATCH',
@@ -121,6 +136,10 @@ export default function KuppisPage() {
   };
 
   const handleToggleApproval = async (kuppi: Kuppi) => {
+    if (!hasPermission(user, 'kuppis.approve')) {
+      toast.error('You do not have permission to approve kuppis');
+      return;
+    }
     try {
       const response = await authFetch(`/api/kuppis/${kuppi.id}`, {
         method: 'PATCH',
@@ -142,6 +161,10 @@ export default function KuppisPage() {
 
   const handleEdit = async () => {
     if (!selectedKuppi) return;
+    if (!hasPermission(user, 'kuppis.update')) {
+      toast.error('You do not have permission to update kuppis');
+      return;
+    }
 
     try {
       const response = await authFetch(`/api/kuppis/${selectedKuppi.id}`, {
@@ -167,6 +190,10 @@ export default function KuppisPage() {
 
   const handleDelete = async () => {
     if (!selectedKuppi) return;
+    if (!hasPermission(user, 'kuppis.delete')) {
+      toast.error('You do not have permission to delete kuppis');
+      return;
+    }
 
     try {
       const response = await authFetch(`/api/kuppis/${selectedKuppi.id}`, {
@@ -205,6 +232,10 @@ export default function KuppisPage() {
       (filterApproval === 'pending' && !kuppi.is_approved);
     return matchesSearch && matchesModule && matchesVisibility && matchesApproval;
   });
+
+  const canUpdate = hasPermission(user, 'kuppis.update');
+  const canApprove = hasPermission(user, 'kuppis.approve');
+  const canDelete = hasPermission(user, 'kuppis.delete');
 
   const columns: GridColDef[] = [
     { field: 'id', headerName: 'ID', width: 70 },
@@ -287,6 +318,7 @@ export default function KuppisPage() {
               setEditDialogOpen(true);
             }}
             title="Edit"
+            disabled={!canUpdate}
           >
             <Edit fontSize="small" />
           </IconButton>
@@ -295,6 +327,7 @@ export default function KuppisPage() {
             color={params.row.is_approved ? 'default' : 'success'}
             onClick={() => handleToggleApproval(params.row)}
             title={params.row.is_approved ? 'Unapprove' : 'Approve'}
+            disabled={!canApprove}
           >
             {params.row.is_approved ? <Cancel fontSize="small" /> : <CheckCircle fontSize="small" />}
           </IconButton>
@@ -302,6 +335,7 @@ export default function KuppisPage() {
             size="small"
             onClick={() => handleToggleVisibility(params.row)}
             title={params.row.is_hidden ? 'Show' : 'Hide'}
+            disabled={!canUpdate}
           >
             {params.row.is_hidden ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
           </IconButton>
@@ -313,6 +347,7 @@ export default function KuppisPage() {
               setDeleteDialogOpen(true);
             }}
             title="Delete"
+            disabled={!canDelete}
           >
             <Delete fontSize="small" />
           </IconButton>
@@ -320,6 +355,10 @@ export default function KuppisPage() {
       ),
     },
   ];
+
+  if (!authLoading && !hasPermission(user, 'kuppis.read')) {
+    return <Alert severity="error">You do not have permission to view kuppis.</Alert>;
+  }
 
   return (
     <Box>

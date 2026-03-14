@@ -40,6 +40,8 @@ import {
 } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { authFetch } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { hasPermission } from '@/lib/permissions';
 
 interface HierarchyData {
   [facultyKey: string]: {
@@ -69,6 +71,7 @@ interface Module {
 }
 
 export default function HierarchyPage() {
+  const { user, loading: authLoading } = useAuth();
   const [hierarchy, setHierarchy] = useState<HierarchyData | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,19 +89,26 @@ export default function HierarchyPage() {
   const [moduleSearchQuery, setModuleSearchQuery] = useState('');
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!hasPermission(user, 'hierarchy.read')) {
+      setLoading(false);
+      return;
+    }
     fetchData();
-  }, []);
+  }, [authLoading, user]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [hierarchyRes, modulesRes] = await Promise.all([
-        authFetch('/api/hierarchy'),
-        authFetch('/api/modules'),
-      ]);
+      const hierarchyPromise = authFetch('/api/hierarchy');
+      const modulesPromise = hasPermission(user, 'modules.read')
+        ? authFetch('/api/modules')
+        : Promise.resolve(null as Response | null);
+
+      const [hierarchyRes, modulesRes] = await Promise.all([hierarchyPromise, modulesPromise]);
 
       const hierarchyData = await hierarchyRes.json();
-      const modulesData = await modulesRes.json();
+      const modulesData = modulesRes ? await modulesRes.json() : { modules: [] };
 
       setHierarchy(hierarchyData.data || null);
       setModules(modulesData.modules || []);
@@ -112,6 +122,10 @@ export default function HierarchyPage() {
 
   const handleSaveHierarchy = async () => {
     if (!hierarchy) return;
+    if (!hasPermission(user, 'hierarchy.update')) {
+      toast.error('You do not have permission to update hierarchy');
+      return;
+    }
 
     try {
       setSaving(true);
@@ -135,6 +149,10 @@ export default function HierarchyPage() {
 
   const handleAddModule = () => {
     if (!hierarchy || !selectedPath || !selectedModuleId) return;
+    if (!hasPermission(user, 'hierarchy.update')) {
+      toast.error('You do not have permission to update hierarchy');
+      return;
+    }
 
     const { faculty, department, semester } = selectedPath;
     const newHierarchy = { ...hierarchy };
@@ -159,6 +177,10 @@ export default function HierarchyPage() {
     moduleId: number
   ) => {
     if (!hierarchy) return;
+    if (!hasPermission(user, 'hierarchy.update')) {
+      toast.error('You do not have permission to update hierarchy');
+      return;
+    }
 
     const newHierarchy = { ...hierarchy };
     const semesterData = newHierarchy[facultyKey]?.children[deptKey]?.children[semesterKey];
@@ -183,6 +205,10 @@ export default function HierarchyPage() {
     const existingModules = hierarchy[faculty]?.children[department]?.children[semester]?.modules || [];
     return modules.filter((m: Module) => !existingModules.includes(m.id));
   };
+
+  if (!authLoading && !hasPermission(user, 'hierarchy.read')) {
+    return <Alert severity="error">You do not have permission to view hierarchy.</Alert>;
+  }
 
   if (loading) {
     return (
@@ -219,7 +245,7 @@ export default function HierarchyPage() {
             variant="contained"
             startIcon={<Save />}
             onClick={handleSaveHierarchy}
-            disabled={!hasChanges || saving}
+            disabled={!hasChanges || saving || !hasPermission(user, 'hierarchy.update')}
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>

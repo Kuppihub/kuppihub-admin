@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { verifyAdminToken, createUnauthorizedResponse, rateLimit } from '@/lib/auth';
+import { requireAdminPermission, createForbiddenResponse, rateLimit } from '@/lib/auth';
 import { isValidUUID, sanitizeObject } from '@/lib/validation';
 
 const supabase = createAdminClient();
@@ -16,10 +16,8 @@ export async function GET(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'users.read');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
     
@@ -54,10 +52,8 @@ export async function PATCH(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'users.update');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
     
@@ -72,12 +68,20 @@ export async function PATCH(
     const sanitizedBody = sanitizeObject(body);
     
     // Whitelist allowed fields to update
-    const allowedFields = ['name', 'email', 'is_active', 'role', 'avatar_url'];
+    const allowedFields = ['name', 'email', 'is_active', 'role', 'avatar_url', 'is_approved_for_kuppies'];
     const filteredBody: Record<string, any> = {};
     for (const field of allowedFields) {
       if (sanitizedBody[field] !== undefined) {
         filteredBody[field] = sanitizedBody[field];
       }
+    }
+
+    if (
+      sanitizedBody.is_approved_for_kuppies !== undefined &&
+      !authResult.admin.isSuperAdmin &&
+      !authResult.admin.permissions.includes('users.approve')
+    ) {
+      return createForbiddenResponse('Insufficient permissions to approve users');
     }
 
     const { data, error } = await supabase
@@ -110,10 +114,8 @@ export async function DELETE(
     if (rateLimitResponse) return rateLimitResponse;
 
     // Authentication
-    const uid = await verifyAdminToken(request);
-    if (!uid) {
-      return createUnauthorizedResponse('Admin authentication required');
-    }
+    const authResult = await requireAdminPermission(request, 'users.delete');
+    if ('response' in authResult) return authResult.response;
 
     const { id } = await params;
     
