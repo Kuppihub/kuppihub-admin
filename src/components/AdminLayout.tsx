@@ -33,6 +33,7 @@ import {
   Settings,
   Logout,
   ChevronLeft,
+  MailOutline,
 } from '@mui/icons-material';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -45,6 +46,7 @@ const menuItems = [
   { text: 'Modules', icon: <School />, path: '/dashboard/modules' },
   { text: 'Kuppis', icon: <VideoLibrary />, path: '/dashboard/kuppis' },
   { text: 'Hierarchy', icon: <AccountTree />, path: '/dashboard/hierarchy' },
+  { text: 'Contact Messages', icon: <MailOutline />, path: '/dashboard/contact-messages' },
   { text: 'Settings', icon: <Settings />, path: '/dashboard/settings' },
 ];
 
