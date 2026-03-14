@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
   const rateLimitResponse = rateLimit(request);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const authResult = await requireAdminPermission(request, 'admin.read');
+  const authResult = await requireAdminPermission(request, 'admin.manage');
   if ('response' in authResult) return authResult.response;
 
   const { data, error } = await supabase

@@ -52,12 +52,11 @@ export default function SettingsPage() {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminRoleId, setNewAdminRoleId] = useState<number | ''>('');
 
-  const canReadAdmins = hasPermission(user, 'admin.read');
   const canManageAdmins = hasPermission(user, 'admin.manage');
 
   useEffect(() => {
     if (authLoading) return;
-    if (!canReadAdmins) {
+    if (!canManageAdmins) {
       setLoadingAdmins(false);
       return;
     }
@@ -199,16 +198,16 @@ export default function SettingsPage() {
               Manage who can access the admin panel and what they can do
             </Typography>
           </Box>
-          <Button variant="outlined" startIcon={<Refresh />} onClick={fetchAdminData} disabled={!canReadAdmins}>
+          <Button variant="outlined" startIcon={<Refresh />} onClick={fetchAdminData} disabled={!canManageAdmins}>
             Refresh
           </Button>
         </Box>
 
-        {!authLoading && !canReadAdmins && (
+        {!authLoading && !canManageAdmins && (
           <Alert severity="error">You do not have permission to view admin access settings.</Alert>
         )}
 
-        {canReadAdmins && (
+        {canManageAdmins && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               Add Admin

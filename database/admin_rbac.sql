@@ -76,6 +76,7 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO public.admin_roles (name, is_system) VALUES
   ('super_admin', true),
   ('admin', true),
+  ('admin_no_delete', true),
   ('approver', true),
   ('editor', true),
   ('viewer', true)
@@ -94,7 +95,6 @@ INSERT INTO public.admin_role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM public.admin_roles r
 JOIN public.admin_permissions p ON p.key IN (
-  'admin.read',
   'users.read', 'users.update', 'users.delete', 'users.approve',
   'modules.read', 'modules.create', 'modules.update', 'modules.delete',
   'faculties.read', 'faculties.create', 'faculties.update', 'faculties.delete',
@@ -106,6 +106,24 @@ JOIN public.admin_permissions p ON p.key IN (
   'stats.read'
 )
 WHERE r.name = 'admin'
+ON CONFLICT DO NOTHING;
+
+-- Admin without delete (full create/update/read + approvals, no deletes, no admin.manage)
+INSERT INTO public.admin_role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM public.admin_roles r
+JOIN public.admin_permissions p ON p.key IN (
+  'users.read', 'users.update', 'users.approve',
+  'modules.read', 'modules.create', 'modules.update',
+  'faculties.read', 'faculties.create', 'faculties.update',
+  'departments.read', 'departments.create', 'departments.update',
+  'semesters.read', 'semesters.create', 'semesters.update',
+  'module_assignments.read', 'module_assignments.create', 'module_assignments.update',
+  'hierarchy.read', 'hierarchy.update',
+  'kuppis.read', 'kuppis.create', 'kuppis.update', 'kuppis.approve',
+  'stats.read'
+)
+WHERE r.name = 'admin_no_delete'
 ON CONFLICT DO NOTHING;
 
 -- Approver can review/approve only
