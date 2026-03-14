@@ -188,26 +188,22 @@ export default function SettingsPage() {
         Configure admin panel settings and preferences
       </Typography>
 
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Box>
-            <Typography variant="h6" gutterBottom>
-              Admin Access
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Manage who can access the admin panel and what they can do
-            </Typography>
+      {canManageAdmins && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                Admin Access
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Manage who can access the admin panel and what they can do
+              </Typography>
+            </Box>
+            <Button variant="outlined" startIcon={<Refresh />} onClick={fetchAdminData}>
+              Refresh
+            </Button>
           </Box>
-          <Button variant="outlined" startIcon={<Refresh />} onClick={fetchAdminData} disabled={!canManageAdmins}>
-            Refresh
-          </Button>
-        </Box>
 
-        {!authLoading && !canManageAdmins && (
-          <Alert severity="error">You do not have permission to view admin access settings.</Alert>
-        )}
-
-        {canManageAdmins && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               Add Admin
@@ -301,8 +297,8 @@ export default function SettingsPage() {
               NEXT_PUBLIC_ADMIN_EMAILS is used only to bootstrap the first super admin.
             </Alert>
           </Box>
-        )}
-      </Paper>
+        </Paper>
+      )}
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
